@@ -39,7 +39,7 @@ def ensure_appimage_integration() -> bool:
         f"Exec={shlex.quote(appimage)}",
         f"Icon={APP_ID}",
         "Terminal=false",
-        "Categories=Network;Monitor;Utility;",
+        "Categories=Network;Monitor;",
         "Keywords=network;latency;jitter;packet loss;ping;wifi;zoom;meet;teams;speed test;",
         "StartupNotify=false",
         "X-AppImage-Integrated=true",
