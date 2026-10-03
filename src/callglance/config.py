@@ -19,7 +19,8 @@ DEFAULTS: dict[str, Any] = {
     "train_length": 5,  # probes per burst (the first one wakes the radio up)
     "train_spacing_ms": 20,  # one voice packet every 20 ms, like Opus/G.711
     "probe_timeout": 1.0,
-    "window": 30,  # seconds of data behind the live verdict
+    "window": 30,  # seconds of data behind latency and jitter in the live verdict
+    "loss_window": 60,  # seconds of data behind packet loss (it needs more samples)
     "public_targets": ["1.1.1.1", "8.8.8.8"],
     "dns_names": ["zoom.us", "meet.google.com", "teams.microsoft.com"],
     "dns_interval": 15,

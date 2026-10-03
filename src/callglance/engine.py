@@ -19,7 +19,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 from callglance import __version__
@@ -211,6 +211,7 @@ class Engine:
         route_reader: Callable[[], Route | None] = default_route,
         dns_reader: Callable[[], list[str]] = dns_servers,
         kind_reader: Callable[[str], str] = iface_kind,
+        link_up: Callable[[str], bool] = iface_is_up,
         icmp: bool | None = None,
     ) -> None:
         self.config = config
@@ -219,6 +220,7 @@ class Engine:
         self.route_reader = route_reader
         self.dns_reader = dns_reader
         self.kind_reader = kind_reader
+        self.link_up = link_up
         self.icmp = ping_sockets_allowed() if icmp is None else icmp
         self.thresholds = Thresholds.from_dict(config["thresholds"])
         self.tracker = VerdictTracker()
@@ -247,6 +249,7 @@ class Engine:
         self._wifi_busy = False
         self._discovery_timer = None
         self.dns_intercepted: bool | None = None
+        self._icmp_checked = time.monotonic()
 
     # -- public API (any thread) ------------------------------------------------
     def add_listener(self, callback: Callable[[dict], None]) -> None:
@@ -274,6 +277,30 @@ class Engine:
 
     def call_in_engine(self, fn: Callable[..., Any], *args: Any) -> None:
         self.loop.call_soon_threadsafe(fn, *args)
+
+    def run_in_engine(self, fn: Callable[..., Any], *args: Any, timeout: float = 3.0) -> Any:
+        """Run ``fn`` on the engine thread and wait for its result."""
+        future: Future = Future()
+
+        def call() -> None:
+            try:
+                future.set_result(fn(*args))
+            except Exception as exc:
+                future.set_exception(exc)
+
+        self.loop.call_soon_threadsafe(call)
+        return future.result(timeout)
+
+    def internet_latency(self, seconds: float) -> float | None:
+        """Median latency to the internet targets over the last ``seconds`` (any thread)."""
+        def compute() -> float | None:
+            summary = self._internet(seconds, seconds, self.loop.time())
+            return summary.latency_ms if summary else None
+
+        try:
+            return self.run_in_engine(compute)
+        except Exception:
+            return None
 
     # -- engine thread ----------------------------------------------------------
     def _run(self) -> None:
@@ -552,7 +579,7 @@ class Engine:
         self._clock_offset = offset
 
         route = self.route_reader()
-        if route is not None and not iface_is_up(route.iface):
+        if route is not None and not self.link_up(route.iface):
             route = None
         if (route and (route.iface, route.gateway)) != (
             self.route and (self.route.iface, self.route.gateway)
@@ -565,6 +592,13 @@ class Engine:
             last = self.dns.results[-1][0] if self.dns.results else 0.0
             if time.time() - last >= dns_every and not self.dns._pending:
                 self.dns.lookup()
+
+        if not self.icmp and time.monotonic() - self._icmp_checked > 60.0:
+            self._icmp_checked = time.monotonic()
+            if ping_sockets_allowed():
+                log.info("unprivileged ICMP is now allowed; switching to ICMP probes")
+                self.icmp = True
+                self._apply_route(self.route_reader())
 
         self._maybe_fall_back()
         snap = self._build_snapshot()
@@ -763,10 +797,3 @@ class Engine:
         }
         snap.update(self.extra)
         return snap
-
-    # -- speed test support ------------------------------------------------------
-    def internet_latency_since(self, seconds: float) -> Summary | None:
-        """Latency to the internet targets over the last ``seconds`` (thread-safe enough
-        for reporting: called from the speed test through call_in_engine)."""
-        now = self.loop.time()
-        return self._internet(seconds, seconds, now)
