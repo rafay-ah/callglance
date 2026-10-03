@@ -54,9 +54,10 @@ the internet beyond. It tells you in plain words where the trouble starts.
 
 ## Install
 
-Packages are attached to every [release](https://github.com/rafay-ah/callglance/releases).
-
 ### Ubuntu and Debian (recommended)
+
+Download `callglance_<version>_all.deb` from the
+[latest release](https://github.com/rafay-ah/callglance/releases/latest), then:
 
 ```sh
 sudo apt install ./callglance_0.1.0_all.deb
@@ -67,6 +68,9 @@ away. **Log out and back in once**, and the dot moves into the top bar: GNOME Sh
 newly installed extensions at login.
 
 ### AppImage (any distribution)
+
+Download `CallGlance-<version>-x86_64.AppImage` from the
+[latest release](https://github.com/rafay-ah/callglance/releases/latest), then:
 
 ```sh
 chmod +x CallGlance-0.1.0-x86_64.AppImage
@@ -298,9 +302,12 @@ CI runs all of them on every push.
 Ubuntu session mode, with the extension loaded and a test-only helper for scripted clicks and
 screenshots. The GIF and screenshots above come from it (`sudo tools/shellshot/record-demo.sh`).
 
-**Releasing.** Bump `__version__` in `src/callglance/__init__.py`, tag `vX.Y.Z` and publish a GitHub
-release. The release workflow tests, builds the `.deb`, the AppImages (x86_64 and aarch64) and the
-extension zip, and attaches them with checksums.
+**Releasing.** Bump `__version__` in `src/callglance/__init__.py`, and add the version to
+`CHANGELOG.md` and to the `<releases>` in `data/io.github.rafay_ah.CallGlance.metainfo.xml`. Then push
+a `vX.Y.Z` tag, or run the *Release* workflow from the Actions tab with that tag. The workflow checks
+that the three agree, runs the tests, builds the `.deb`, the AppImages (x86_64 and aarch64), the
+extension zip and a source tarball, smoke-tests the packages, and publishes a GitHub release with the
+changelog entry as notes and the files' checksums.
 
 ## Troubleshooting
 

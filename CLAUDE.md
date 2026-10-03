@@ -63,6 +63,14 @@ PYTHONPATH=src python3 -m callglance --demo -v   # the app on a simulated connec
 packaging/build-deb.sh && packaging/build-appimage.sh
 ```
 
+## Releasing
+
+Bump `__version__` in `src/callglance/__init__.py`, and add the version to `CHANGELOG.md` and to the
+`<releases>` in `data/io.github.rafay_ah.CallGlance.metainfo.xml`; the Release workflow refuses a tag
+they don't all match. Pushing a `vX.Y.Z` tag builds, tests and publishes the GitHub release. Cloud
+sessions cannot push tags: run the Release workflow (`workflow_dispatch`) on `main` with the `tag`
+input instead, which creates the tag and the release.
+
 ## Rules learned the hard way
 
 - No root, ever: unprivileged probes only. Ubuntu does not allow ICMP ping sockets by default, so

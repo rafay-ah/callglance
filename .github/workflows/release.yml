@@ -1,68 +1,172 @@
 name: Release
 
-# Publishing a GitHub release (tag vX.Y.Z, matching __version__) builds the
-# packages and attaches them to it. Use "Run workflow" to rebuild an existing tag.
+# Builds the .deb, the AppImages and the GNOME Shell extension zip, and
+# publishes them as a GitHub release:
+# - push a vX.Y.Z tag, or
+# - run the workflow from the Actions tab with a tag (created on the selected
+#   branch when it does not exist yet), or
+# - publish a release in the web UI, which gets the files attached.
+# Running it without a tag only keeps the packages as workflow artifacts.
+#
+# Before tagging: bump __version__ in src/callglance/__init__.py, and add the
+# version to CHANGELOG.md and to the AppStream metadata's <releases>.
 on:
+  push:
+    tags: ["v*"]
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build, e.g. v0.1.0
-        required: true
+        description: "Tag to publish, e.g. v0.1.0 (leave empty to only build)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
+# A release made in the web UI also pushes its tag: run one at a time.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: Build and upload
+  release:
+    name: Build, test and publish
     runs-on: ubuntu-24.04
-    env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ env.TAG }}
+          fetch-depth: 0  # with tags, to build an existing tag's commit
 
-      - name: Check the tag matches the code
-        id: version
+      - name: Select the release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          VERSION="${TAG#v}"
-          SOURCE=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('src/callglance/__init__.py').read())[1])")
-          if [ "$VERSION" != "$SOURCE" ]; then
-            echo "::error::Tag $TAG does not match __version__ = $SOURCE"
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$GITHUB_REF_NAME"
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ] && git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            git checkout -q "refs/tags/$tag"
+          fi
+          version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/callglance/__init__.py)"
+          {
+            echo "TAG=$tag"
+            echo "VERSION=$version"
+            echo "RELEASE_SHA=$(git rev-parse HEAD)"
+          } >> "$GITHUB_ENV"
+          echo "Building ${tag:-packages only} ($version) from $(git rev-parse --short HEAD)"
 
-      - name: Install system packages
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-gi python3-gi-cairo \
-            gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 python3-pytest dbus openssl zip
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
+            python3-pytest dbus dbus-x11 openssl zip desktop-file-utils appstream lintian \
+            xvfb xauth curl file
 
-      - name: Tests
+      - name: Check the tag matches the version
+        if: env.TAG != ''
+        run: |
+          if [ "${TAG#v}" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match __version__ $VERSION"
+            exit 1
+          fi
+          grep -q "^## \[$VERSION\]" CHANGELOG.md ||
+            { echo "::error::CHANGELOG.md has no entry for $VERSION"; exit 1; }
+          grep -q "<release version=\"$VERSION\"" data/*.metainfo.xml ||
+            { echo "::error::The AppStream metadata has no release $VERSION"; exit 1; }
+
+      - name: Test
         run: python3 -m pytest -q
 
-      - name: Build packages
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
+      - name: Validate desktop entries and AppStream metadata
+        run: |
+          desktop-file-validate data/io.github.rafay_ah.CallGlance.desktop \
+            data/io.github.rafay_ah.CallGlance.autostart.desktop
+          appstreamcli validate --no-net data/io.github.rafay_ah.CallGlance.metainfo.xml
+
+      - name: Build the .deb
         run: |
           packaging/build-deb.sh "$VERSION" dist
+          lintian --fail-on error dist/*.deb
+
+      - name: Build the AppImages, the extension zip and the source tarball
+        run: |
           packaging/build-appimage.sh "$VERSION" dist x86_64
           packaging/build-appimage.sh "$VERSION" dist aarch64
           packaging/build-extension-zip.sh "$VERSION" dist
-          (cd dist && sha256sum -- * > SHA256SUMS)
-          ls -la dist
+          git archive --format=tar.gz --prefix="callglance-$VERSION/" \
+            -o "dist/callglance-$VERSION.tar.gz" HEAD
 
-      - name: Smoke-test the packages
+      - name: Smoke-test the .deb
         run: |
           sudo apt-get install -y ./dist/callglance_*_all.deb
-          test "$(callglance --version)" = "CallGlance ${{ steps.version.outputs.version }}"
-          APPIMAGE_EXTRACT_AND_RUN=1 ./dist/CallGlance-*-x86_64.AppImage --version
+          test "$(callglance --version)" = "CallGlance $VERSION"
+          dbus-run-session -- callglance doctor
 
-      - name: Attach to the release
+      - name: Smoke-test the AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          appimage="$(ls dist/*-x86_64.AppImage)"
+          test "$("$appimage" --version)" = "CallGlance $VERSION"
+          dbus-run-session -- xvfb-run -a "$appimage" doctor
+          # Run the app in demo mode for a while: it must neither exit nor log a
+          # Python traceback.
+          set +e
+          timeout 15 dbus-run-session -- xvfb-run -a "$appimage" --demo > demo.log 2>&1
+          status=$?
+          set -e
+          cat demo.log
+          [ "$status" -eq 124 ] || { echo "::error::demo exited with $status"; exit 1; }
+          ! grep -q "Traceback" demo.log
+
+      - name: Checksums
+        run: cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: callglance-packages
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: env.TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            exit 0
+          fi
+          {
+            # What changed: this version's CHANGELOG.md entry.
+            awk -v heading="## [$VERSION]" '
+              index($0, heading) == 1 { found = 1; next }
+              found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+              found { print }
+            ' CHANGELOG.md
+            cat <<NOTES
+
+          ### Download
+
+          | File | For |
+          |---|---|
+          | \`callglance_${VERSION}_all.deb\` | **Ubuntu 24.04+, Debian 13+, Linux Mint 22+, Pop!_OS 24.04+**: \`sudo apt install ./callglance_${VERSION}_all.deb\` |
+          | \`CallGlance-${VERSION}-x86_64.AppImage\` | Any distribution with Python 3 and PyGObject: \`chmod +x\` it and run it |
+          | \`CallGlance-${VERSION}-aarch64.AppImage\` | The same, for 64-bit ARM |
+          | \`callglance@rafay-ah.github.io.shell-extension.zip\` | The GNOME Shell extension on its own (already in the .deb and the AppImages) |
+          | \`callglance-${VERSION}.tar.gz\` | Source |
+          | \`SHA256SUMS\` | Checksums of all the files |
+
+          After installing on GNOME, **log out and back in once** so the top-bar dot appears:
+          GNOME only loads new Shell extensions at login. Until then, CallGlance shows a tray icon.
+          NOTES
+          } > release-notes.md
+          cat release-notes.md
+          # --target only matters when the tag does not exist yet: it is created there.
+          gh release create "$TAG" dist/* --target "$RELEASE_SHA" \
+            --title "CallGlance $VERSION" --notes-file release-notes.md
