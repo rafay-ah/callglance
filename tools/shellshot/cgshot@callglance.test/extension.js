@@ -1,6 +1,7 @@
 // Test-only helper for a throwaway headless GNOME Shell: lets scripts evaluate
 // JavaScript in the shell and save screenshots. NEVER install in a real session.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -21,6 +22,16 @@ const XML = `<node><interface name="test.CallGlance.Shot">
 export default class Harness extends Extension {
     enable() {
         globalThis.cgMain = Main;
+        // A virtual pointer for scripted clicks, drags and hovers.
+        const seat = (global.stage.context?.get_backend() ?? Clutter.get_default_backend())
+            .get_default_seat();
+        const pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        const now = () => GLib.get_monotonic_time();
+        globalThis.cgPointer = {
+            move: (x, y) => pointer.notify_absolute_motion(now(), x, y),
+            press: (button = 1) => pointer.notify_button(now(), button, Clutter.ButtonState.PRESSED),
+            release: (button = 1) => pointer.notify_button(now(), button, Clutter.ButtonState.RELEASED),
+        };
         this._impl = Gio.DBusExportedObject.wrapJSObject(XML, this);
         this._impl.export(Gio.DBus.session, '/test/CallGlance/Shot');
         this._owner = Gio.bus_own_name(Gio.BusType.SESSION, 'test.CallGlance.Shot',
@@ -74,5 +85,6 @@ export default class Harness extends Extension {
         if (this._owner)
             Gio.bus_unown_name(this._owner);
         delete globalThis.cgMain;
+        delete globalThis.cgPointer;
     }
 }
