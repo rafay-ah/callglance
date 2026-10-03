@@ -14,6 +14,7 @@ listeners, and every few seconds a point is added to the history.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from collections import deque
@@ -36,6 +37,8 @@ from callglance.netinfo import (
     pick_isp_hop,
 )
 from callglance.probes import (
+    CLASS_CHAOS,
+    DNS_TXT,
     DnsQuery,
     IcmpEcho,
     Probe,
@@ -43,6 +46,7 @@ from callglance.probes import (
     TcpConnect,
     UdpTtl,
     local_address_for,
+    parse_txt_answer,
     ping_sockets_allowed,
 )
 from callglance.stats import Summary
@@ -242,6 +246,7 @@ class Engine:
         self._workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="callglance-io")
         self._wifi_busy = False
         self._discovery_timer = None
+        self.dns_intercepted: bool | None = None
 
     # -- public API (any thread) ------------------------------------------------
     def add_listener(self, callback: Callable[[dict], None]) -> None:
@@ -352,6 +357,9 @@ class Engine:
             methods.append(("tcp:443", lambda a=addr: TcpConnect(a, 443), tcp_sched))
             self._add_monitor(f"net:{addr}", addr, methods, step * (i + 2))
 
+        if not self.icmp and "1.1.1.1" in self.public_targets:
+            self.loop.call_later(0.2, self._check_resolver_identity)
+
         servers = self.dns_reader()
         self.dns = DnsTimer(self.loop, servers[0] if servers else self.public_targets[0],
                             list(self.config["dns_names"]))
@@ -361,12 +369,21 @@ class Engine:
         self._poll_wifi()
 
     def _router_methods(self, gw: str) -> list:
+        """Ways to time the router, best first.
+
+        Without ICMP, a TCP handshake to a closed port is ideal: the RST comes from
+        the router's kernel, as fast and steady as a ping. A DNS query is next; it
+        asks for "version.bind" in the CHAOS class, which dnsmasq (inside most home
+        routers) answers itself instead of forwarding upstream.
+        """
         sched, tcp_sched, slow = self._schedule(), self._tcp_schedule(), self._slow_schedule()
         target = self.public_targets[0]
         methods: list = []
         if self.icmp:
             methods.append(("icmp", lambda: IcmpEcho(gw), sched))
-        methods.append(("dns", lambda: DnsQuery(gw), sched))
+        methods.append(("tcp:9", lambda: TcpConnect(gw, 9), sched))
+        methods.append(("dns", lambda: DnsQuery(gw, "version.bind", qtype=DNS_TXT,
+                                                 qclass=CLASS_CHAOS), sched))
         methods.append(("tcp:80", lambda: TcpConnect(gw, 80), tcp_sched))
         methods.append(("tcp:443", lambda: TcpConnect(gw, 443), tcp_sched))
         if self.icmp:
@@ -390,6 +407,42 @@ class Engine:
         mon = TargetMonitor(self.loop, key, addr, methods, offset=offset)
         self.monitors[key] = mon
         mon.start()
+
+    # -- DNS interception ---------------------------------------------------------
+    def _check_resolver_identity(self) -> None:
+        """Some routers and ISPs answer *all* DNS traffic themselves. A "query to
+        1.1.1.1" then never leaves the house, which would hide every ISP problem.
+        Cloudflare answers the CHAOS-class "id.server" question with the code of the
+        data centre that served it (e.g. "AMS"); anybody else answers differently.
+        When DNS is intercepted, public targets are timed with TCP instead."""
+        route = self.route
+        try:
+            probe = DnsQuery("1.1.1.1", "id.server", qtype=DNS_TXT, qclass=CLASS_CHAOS)
+        except OSError:
+            return
+        answers: list[bytes] = []
+        probe.on_response = answers.append
+        probe.attach(self.loop, lambda reply: None)
+        for k in range(3):
+            self.loop.call_later(0.3 * k, probe.send, 900 + k)
+
+        def verdict() -> None:
+            probe.detach()
+            if self.route != route or not answers:
+                return  # no answer at all: nothing to conclude
+            txt = parse_txt_answer(answers[0]) or ""
+            genuine = bool(re.fullmatch(r"[A-Z]{3}", txt.strip()))
+            self.dns_intercepted = not genuine
+            if genuine:
+                return
+            log.warning("DNS to 1.1.1.1 is answered by someone else (%r): timing public "
+                        "targets with TCP instead.", txt)
+            for key, mon in self.monitors.items():
+                if key.startswith("net:") and mon.method_name == "dns":
+                    mon.fall_back()
+                    mon.reset()
+
+        self.loop.call_later(2.0, verdict)
 
     # -- path discovery -----------------------------------------------------------
     def _discover(self) -> None:

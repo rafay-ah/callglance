@@ -14,6 +14,7 @@ belongs to the first hop where it appears *and keeps appearing downstream*.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 
 from callglance.stats import Summary
@@ -31,11 +32,16 @@ class Thresholds:
     See README "How the verdict works" for the sources behind these numbers.
     """
 
+    # Round-trip time. Teams wants < 100 ms client-to-edge and Meet is best below
+    # 100 ms; Meet degrades from 300 ms, which is also ITU-T G.114's 150 ms one way.
     latency_fair: float = 100.0
-    latency_poor: float = 250.0
-    jitter_fair: float = 20.0
-    jitter_poor: float = 40.0
-    loss_fair: float = 1.0
+    latency_poor: float = 300.0
+    # Mean |difference| of consecutive RTTs. Teams, Cisco and Google Voice use
+    # 30 ms (one way), Zoom 40 ms; an RTT-based figure adds both directions.
+    jitter_fair: float = 30.0
+    jitter_poor: float = 50.0
+    # Round-trip loss (either direction). Teams < 1%, Zoom <= 2%, G.1010 voice < 3%.
+    loss_fair: float = 1.5
     loss_poor: float = 3.0
 
     @classmethod
@@ -107,26 +113,48 @@ class Inputs:
     router_measurable: bool = True  # False when the router ignores every probe method
 
 
-MIN_LOSS_SAMPLES = 100  # below this, "no loss here" is not statistically meaningful
-
-
 def _value(metric: str, s: Summary) -> float | None:
     return {"loss": s.loss_pct, "jitter": s.jitter_ms, "latency": s.latency_ms}[metric]
+
+
+BACKGROUND_LOSS = 0.002  # what a healthy hop loses anyway (0.2%)
+LIKELIHOOD_RATIO = math.log(3.0)
+
+
+def _loss_evidence(seg: Summary, net: Summary) -> str:
+    """Is the segment's loss count better explained by "this segment causes at least
+    half of the loss seen at the internet" or by "this segment is healthy"?
+
+    A binomial likelihood ratio: with few probes neither hypothesis wins and the
+    answer is "unknown" instead of a coin flip.
+    """
+    n = seg.sent
+    k = n - seg.received
+    p_net = max((net.loss_pct or 0.0) / 100.0, 2 * BACKGROUND_LOSS)
+    p_half = min(0.5 * p_net, 0.99)
+    if p_half <= BACKGROUND_LOSS or n == 0:
+        return "unknown"
+    ll_cause = k * math.log(p_half) + (n - k) * math.log(1 - p_half)
+    ll_clean = k * math.log(BACKGROUND_LOSS) + (n - k) * math.log(1 - BACKGROUND_LOSS)
+    ratio = ll_cause - ll_clean
+    if ratio >= LIKELIHOOD_RATIO:
+        return "yes"
+    if ratio <= -LIKELIHOOD_RATIO:
+        return "no"
+    return "unknown"
 
 
 def _evidence(metric: str, seg: Summary | None, net: Summary, th: Thresholds) -> str:
     """Does ``seg`` already show the problem seen at the internet? yes / no / unknown."""
     if seg is None or not seg.reachable:
         return "unknown"
+    if metric == "loss":
+        return _loss_evidence(seg, net)
     value, net_value = _value(metric, seg), _value(metric, net) or 0.0
     if value is None:
         return "unknown"
-    floor = {"loss": th.loss_fair, "jitter": th.jitter_fair, "latency": th.latency_fair}[metric]
-    if value >= max(0.5 * floor, 0.5 * net_value):
-        return "yes"
-    if metric == "loss" and not (seg.sent >= MIN_LOSS_SAMPLES and value < 0.25 * net_value):
-        return "unknown"  # a handful of probes cannot rule loss in or out
-    return "no"
+    floor = {"jitter": th.jitter_fair, "latency": th.latency_fair}[metric]
+    return "yes" if value >= max(0.5 * floor, 0.5 * net_value) else "no"
 
 
 def _degraded(seg: Summary | None, net: Summary, th: Thresholds) -> bool:

@@ -111,7 +111,8 @@ def up() -> None:
         nsexec(ns, "sysctl", "-qw", "net.ipv4.ip_forward=1")
     # Real home routers answer DNS; public resolvers obviously do.
     _spawn("router", PYTHON, str(HERE / "dnsd.py"), "192.168.1.1", name="dns-router")
-    _spawn("inet", PYTHON, str(HERE / "dnsd.py"), "1.1.1.1", "8.8.8.8", name="dns-inet")
+    _spawn("inet", PYTHON, str(HERE / "dnsd.py"), "--identity=SIM", "1.1.1.1", "8.8.8.8",
+           name="dns-inet")
     allow_ping(True)
 
     # Wait until the whole path forwards packets.

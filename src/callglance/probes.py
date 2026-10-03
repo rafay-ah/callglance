@@ -3,11 +3,13 @@
 Nothing here needs root or extra capabilities:
 
 * ``IcmpEcho`` uses Linux "ping sockets" (``SOCK_DGRAM`` + ``IPPROTO_ICMP``). The
-  kernel allows them for groups inside ``net.ipv4.ping_group_range``; systemd's
-  default (``0 2147483647``) allows everyone, which covers Ubuntu, Fedora, Arch...
-* ``DnsQuery`` times a plain UDP DNS query. Public resolvers and most home routers
-  answer them, so they are the first fallback when ping sockets are not allowed.
-* ``TcpConnect`` times a TCP handshake (SYN -> SYN/ACK or RST).
+  kernel allows them for groups inside ``net.ipv4.ping_group_range``. Upstream
+  systemd opens them to everyone, and Fedora and Arch follow it, but Debian and
+  Ubuntu (since 22.10) keep the kernel default ``1 0``, which forbids them.
+* ``TcpConnect`` times a TCP handshake (SYN -> SYN/ACK, or RST from a closed
+  port). Both answers come straight from the far end's kernel, so this is as
+  precise as a ping; it is the fallback for the router.
+* ``DnsQuery`` times a plain UDP DNS query: the fallback for public resolvers.
 * ``IcmpTtl`` / ``UdpTtl`` send TTL-limited packets and read the router's
   "time exceeded" reply from the socket error queue (``IP_RECVERR``), which is how
   ``tracepath`` discovers hops without privileges.
@@ -362,13 +364,51 @@ class UdpTtl(_SocketProbe):
 
 # -- DNS -----------------------------------------------------------------
 
-def build_dns_query(query_id: int, name: str, qtype: int = 1) -> bytes:
+DNS_A = 1
+DNS_TXT = 16
+CLASS_IN = 1
+CLASS_CHAOS = 3
+
+
+def build_dns_query(query_id: int, name: str, qtype: int = DNS_A, qclass: int = CLASS_IN) -> bytes:
     """A minimal recursive DNS query (RFC 1035) for ``name``."""
     header = struct.pack("!HHHHHH", query_id & 0xFFFF, 0x0100, 1, 0, 0, 0)
     labels = b"".join(
         bytes([len(part)]) + part.encode("idna") for part in name.strip(".").split(".") if part
     )
-    return header + labels + b"\0" + struct.pack("!HH", qtype, 1)
+    return header + labels + b"\0" + struct.pack("!HH", qtype, qclass)
+
+
+def _skip_name(data: bytes, pos: int) -> int:
+    while pos < len(data):
+        length = data[pos]
+        if length == 0:
+            return pos + 1
+        if length & 0xC0 == 0xC0:  # compression pointer
+            return pos + 2
+        pos += length + 1
+    return pos
+
+
+def parse_txt_answer(data: bytes) -> str | None:
+    """The first TXT string of a DNS response, if any (used for CHAOS id.server)."""
+    if len(data) < 12:
+        return None
+    _id, _flags, qdcount, ancount, _ns, _ar = struct.unpack("!HHHHHH", data[:12])
+    pos = 12
+    for _ in range(qdcount):
+        pos = _skip_name(data, pos) + 4
+    for _ in range(ancount):
+        pos = _skip_name(data, pos)
+        if pos + 10 > len(data):
+            return None
+        rtype, _rclass, _ttl, rdlength = struct.unpack("!HHIH", data[pos:pos + 10])
+        pos += 10
+        rdata = data[pos:pos + rdlength]
+        pos += rdlength
+        if rtype == DNS_TXT and rdata:
+            return rdata[1:1 + rdata[0]].decode("ascii", "replace")
+    return None
 
 
 def parse_dns_response(data: bytes) -> tuple[int, int, int] | None:
@@ -386,11 +426,15 @@ class DnsQuery(_SocketProbe):
 
     kind = "dns"
 
-    def __init__(self, server: str, name: str = "google.com", port: int = 53) -> None:
+    def __init__(self, server: str, name: str = "google.com", port: int = 53,
+                 qtype: int = DNS_A, qclass: int = CLASS_IN) -> None:
         super().__init__()
         self.server = server
         self.name = name
         self.port = port
+        self.qtype = qtype
+        self.qclass = qclass
+        self.on_response: Callable[[bytes], None] | None = None  # raw answers, if wanted
         self.refused = False
         family = socket.AF_INET6 if ":" in server else socket.AF_INET
         self.sock = socket.socket(family, socket.SOCK_DGRAM)
@@ -404,7 +448,7 @@ class DnsQuery(_SocketProbe):
     def send(self, seq: int, name: str | None = None) -> bool:
         self._stamp(seq)
         try:
-            self.sock.send(build_dns_query(seq, name or self.name))
+            self.sock.send(build_dns_query(seq, name or self.name, self.qtype, self.qclass))
             return True
         except OSError as exc:
             if exc.errno == errno.ECONNREFUSED:
@@ -425,6 +469,8 @@ class DnsQuery(_SocketProbe):
             parsed = parse_dns_response(data)
             if parsed is None:
                 continue
+            if self.on_response is not None:
+                self.on_response(data)
             seq = parsed[0]
             rtt = self._rtt(seq, kernel_timestamp(anc))
             if rtt is not None:
