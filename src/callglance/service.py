@@ -37,6 +37,7 @@ from callglance import (  # noqa: E402
     DBUS_PATH,
     __version__,
     autostart,
+    integration,
     shellext,
 )
 from callglance.config import UI_WRITABLE, Config, state_dir  # noqa: E402
@@ -269,6 +270,10 @@ class Service(Gio.Application):
             self.config.set("autostart_initialized", True)
         result = shellext.ensure_enabled_once(self.config)
         log.info("GNOME Shell extension: %s", result)
+        try:
+            integration.ensure_appimage_integration()
+        except OSError as exc:
+            log.warning("could not add CallGlance to the app grid: %s", exc)
 
     # -- snapshots ----------------------------------------------------------------------
     def _publish(self, snap: dict) -> bool:
@@ -475,8 +480,13 @@ class Service(Gio.Application):
         if self._show_pending:
             args.append("--show")
             self._show_pending = False
+        env = dict(os.environ)
+        # The helper runs `python -m callglance`: make sure it finds this very copy
+        # (packages keep it in a private directory, not in site-packages).
+        here = str(Path(__file__).resolve().parents[1])
+        env["PYTHONPATH"] = os.pathsep.join(p for p in (here, env.get("PYTHONPATH")) if p)
         try:
-            self._ui_proc = subprocess.Popen(args, env=dict(os.environ))
+            self._ui_proc = subprocess.Popen(args, env=env)
         except OSError as exc:
             log.warning("could not start the tray helper: %s", exc)
             return

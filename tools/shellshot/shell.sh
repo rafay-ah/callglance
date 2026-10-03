@@ -4,6 +4,7 @@
 #   shell.sh shot FILE [x y w h]  save a screenshot (whole screen, or an area)
 #   shell.sh run CMD...           run a command inside the session (as user cg)
 STATE=/tmp/cg-session
+# shellcheck source=/dev/null
 source "$STATE/bus.env"
 as_cg() { setpriv --reuid=cg --regid=cg --init-groups env DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" HOME=/home/cg "$@"; }
 case "$1" in
@@ -11,7 +12,7 @@ case "$1" in
   shot)
     tmp="$STATE/shot-$$.png"
     as_cg gdbus call --session -d test.CallGlance.Shot -o /test/CallGlance/Shot \
-      -m test.CallGlance.Shot.Screenshot "$tmp" ${3:-0} ${4:-0} ${5:-0} ${6:-0} >/dev/null \
+      -m test.CallGlance.Shot.Screenshot "$tmp" "${3:-0}" "${4:-0}" "${5:-0}" "${6:-0}" >/dev/null \
       && mv "$tmp" "$2" ;;
   run) shift; as_cg "$@" ;;
 esac

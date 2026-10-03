@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CallGlance
+Comment=Connection quality for calls, at a glance
+Exec=callglance --background
+Icon=io.github.rafay_ah.CallGlance
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3

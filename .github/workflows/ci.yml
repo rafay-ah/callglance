@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ruff
+        run: pipx run ruff check src tests tools
+      - name: GNOME Shell extension parses as ES modules
+        run: |
+          for f in gnome-shell/*/*.js tools/shellshot/*/*.js; do
+            cp "$f" "$RUNNER_TEMP/$(basename "$f" .js).mjs"
+            node --check "$RUNNER_TEMP/$(basename "$f" .js).mjs"
+          done
+      - name: Shell scripts
+        run: shellcheck -x packaging/*.sh tools/shellshot/*.sh
+
+  test:
+    name: Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-gi python3-gi-cairo \
+            gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 python3-pytest dbus openssl
+      - name: Unit and D-Bus tests
+        run: python3 -m pytest -q
+
+  netsim:
+    name: Simulated home network
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-pytest iproute2 iptables \
+            ethtool iputils-ping
+      - name: End-to-end scenarios (namespaces need root; the engine runs as nobody)
+        run: sudo python3 -m pytest -m netsim -q
+
+  package:
+    name: Packages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zip
+      - name: Build .deb, AppImage and extension zip
+        run: |
+          packaging/build-deb.sh "" dist
+          packaging/build-appimage.sh "" dist x86_64
+          packaging/build-extension-zip.sh "" dist
+      - name: Install and smoke-test the .deb
+        run: |
+          sudo apt-get install -y ./dist/callglance_*_all.deb
+          callglance --version
+          callglance doctor
+          callglance status --seconds 6 || true
+      - name: Smoke-test the AppImage
+        run: APPIMAGE_EXTRACT_AND_RUN=1 ./dist/CallGlance-*-x86_64.AppImage --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*
+          retention-days: 14

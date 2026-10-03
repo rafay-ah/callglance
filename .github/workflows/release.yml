@@ -1,0 +1,68 @@
+name: Release
+
+# Publishing a GitHub release (tag vX.Y.Z, matching __version__) builds the
+# packages and attaches them to it. Use "Run workflow" to rebuild an existing tag.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build, e.g. v0.1.0
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and upload
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check the tag matches the code
+        id: version
+        run: |
+          VERSION="${TAG#v}"
+          SOURCE=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('src/callglance/__init__.py').read())[1])")
+          if [ "$VERSION" != "$SOURCE" ]; then
+            echo "::error::Tag $TAG does not match __version__ = $SOURCE"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-gi python3-gi-cairo \
+            gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 python3-pytest dbus openssl zip
+
+      - name: Tests
+        run: python3 -m pytest -q
+
+      - name: Build packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          packaging/build-deb.sh "$VERSION" dist
+          packaging/build-appimage.sh "$VERSION" dist x86_64
+          packaging/build-appimage.sh "$VERSION" dist aarch64
+          packaging/build-extension-zip.sh "$VERSION" dist
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          ls -la dist
+
+      - name: Smoke-test the packages
+        run: |
+          sudo apt-get install -y ./dist/callglance_*_all.deb
+          test "$(callglance --version)" = "CallGlance ${{ steps.version.outputs.version }}"
+          APPIMAGE_EXTRACT_AND_RUN=1 ./dist/CallGlance-*-x86_64.AppImage --version
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"

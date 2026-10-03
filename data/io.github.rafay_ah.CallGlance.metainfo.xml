@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.rafay_ah.CallGlance</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>CallGlance</name>
+  <summary>Is your connection good enough for calls?</summary>
+  <description>
+    <p>
+      CallGlance keeps an eye on latency, jitter and packet loss to your router, your ISP and
+      the internet, and tells you in plain words whether your connection is good for calls,
+      and whether your Wi-Fi or your ISP is to blame when it is not.
+    </p>
+    <ul>
+      <li>A coloured dot in the top bar, with live numbers and a one-hour graph</li>
+      <li>Wi-Fi signal strength, band and link speed</li>
+      <li>A notification when quality drops below what Zoom, Meet and Teams need</li>
+      <li>An optional speed test with a bufferbloat grade</li>
+      <li>A desktop widget you can pin on top</li>
+    </ul>
+    <p>Lightweight, and it needs no root.</p>
+  </description>
+  <launchable type="desktop-id">io.github.rafay_ah.CallGlance.desktop</launchable>
+  <url type="homepage">https://github.com/rafay-ah/callglance</url>
+  <url type="bugtracker">https://github.com/rafay-ah/callglance/issues</url>
+  <developer id="io.github.rafay_ah">
+    <name>rafay-ah</name>
+  </developer>
+  <categories>
+    <category>Network</category>
+    <category>Monitor</category>
+  </categories>
+  <provides>
+    <binary>callglance</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-03"/>
+  </releases>
+</component>

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=CallGlance
+GenericName=Call Quality Monitor
+Comment=See at a glance whether your connection is good enough for calls
+Exec=callglance
+Icon=io.github.rafay_ah.CallGlance
+Terminal=false
+Categories=Network;Monitor;Utility;
+Keywords=network;internet;latency;jitter;packet loss;ping;wifi;zoom;meet;teams;speed test;
+StartupNotify=false
+SingleMainWindow=true
+X-GNOME-UsesNotifications=true

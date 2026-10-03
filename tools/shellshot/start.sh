@@ -10,6 +10,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$STATE" /home/cg/.config /home/cg/.local /home/cg/shell.log
 mkdir -p "$STATE"; chmod 777 "$STATE"
 # No logind in a container: hide /run/systemd so the shell uses its dummy login manager.
+# shellcheck disable=SC2016  # the inner script expands its own arguments
 exec unshare -m --propagation private bash -c '
   mount -t tmpfs none /run/systemd
   exec setpriv --reuid=cg --regid=cg --init-groups env -i PATH=/usr/local/bin:/usr/bin:/bin \
