@@ -1,0 +1,9 @@
+{
+  "uuid": "callglance@rafay-ah.github.io",
+  "name": "CallGlance",
+  "description": "Is your connection good enough for calls? A colored dot in the top bar, live latency, jitter and packet loss to your router, your ISP and the internet, a one-hour graph, and a desktop widget. Tells you whether your Wi-Fi or your ISP is to blame.\n\nNeeds the CallGlance app, which does the measuring: https://github.com/rafay-ah/callglance",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "url": "https://github.com/rafay-ah/callglance",
+  "version": 1,
+  "version-name": "0.1.0"
+}

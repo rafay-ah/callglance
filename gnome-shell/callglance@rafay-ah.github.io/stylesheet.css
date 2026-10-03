@@ -1,0 +1,171 @@
+/* CallGlance. Status colours follow Apple's system palette, which stays vivid
+   on both light and dark shell themes. */
+
+/* -- top bar -------------------------------------------------------------- */
+.cg-panel-box { spacing: 6px; }
+
+.cg-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background-color: #8e8e93;
+  transition-duration: 400ms;
+}
+.cg-dot.cg-good { background-color: #34c759; box-shadow: 0 0 5px rgba(52, 199, 89, 0.55); }
+.cg-dot.cg-fair { background-color: #ff9f0a; box-shadow: 0 0 5px rgba(255, 159, 10, 0.6); }
+.cg-dot.cg-poor,
+.cg-dot.cg-offline { background-color: #ff453a; box-shadow: 0 0 6px rgba(255, 69, 58, 0.7); }
+
+.cg-panel-label { font-feature-settings: "tnum"; font-weight: 600; }
+
+/* -- popover -------------------------------------------------------------- */
+.cg-item { padding: 0; }
+.cg-item:hover, .cg-item:focus, .cg-item:active { background-color: transparent; }
+.cg-popover { padding: 10px 14px 4px 14px; spacing: 12px; }
+
+.cg-header { spacing: 12px; }
+.cg-big-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  margin-top: 5px;
+  background-color: #8e8e93;
+  transition-duration: 400ms;
+}
+.cg-big-dot.cg-good { background-color: #34c759; box-shadow: 0 0 10px rgba(52, 199, 89, 0.6); }
+.cg-big-dot.cg-fair { background-color: #ff9f0a; box-shadow: 0 0 10px rgba(255, 159, 10, 0.6); }
+.cg-big-dot.cg-poor,
+.cg-big-dot.cg-offline { background-color: #ff453a; box-shadow: 0 0 12px rgba(255, 69, 58, 0.7); }
+
+.cg-headline { font-size: 17px; font-weight: 700; }
+.cg-detail { font-size: 12.5px; color: rgba(127, 127, 127, 1); padding-top: 2px; }
+
+.cg-chain { height: 64px; }
+
+.cg-tiles { spacing: 8px; }
+.cg-tile {
+  padding: 9px 4px 8px 4px;
+  border-radius: 12px;
+  background-color: rgba(127, 127, 127, 0.12);
+}
+.cg-tile-value {
+  font-size: 15.5px;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+  text-align: center;
+}
+.cg-tile-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+  color: rgba(127, 127, 127, 1);
+  padding-top: 2px;
+}
+.cg-text-good { color: #34c759; }
+.cg-text-fair { color: #ff9f0a; }
+.cg-text-poor, .cg-text-offline { color: #ff453a; }
+
+.cg-graph-box { spacing: 4px; }
+.cg-section-head { spacing: 8px; }
+.cg-section-title { font-size: 11px; font-weight: 700; color: rgba(127, 127, 127, 1); }
+.cg-legend { font-size: 10px; color: rgba(127, 127, 127, 0.9); padding-right: 6px; }
+.cg-swatch { width: 10px; height: 3px; border-radius: 2px; margin-right: 4px; }
+.cg-swatch-latency { background-color: #0a84ff; }
+.cg-swatch-jitter { height: 8px; background-color: rgba(10, 132, 255, 0.25); }
+.cg-swatch-loss { width: 2px; height: 9px; background-color: #ff453a; }
+
+.cg-head-fair { color: #ff9f0a; }
+.cg-head-poor, .cg-head-offline { color: #ff453a; }
+.cg-graph { height: 104px; }
+
+.cg-row { spacing: 10px; }
+.cg-row-text { font-size: 12px; font-feature-settings: "tnum"; }
+.cg-bars { spacing: 2px; }
+.cg-bar { width: 3px; border-radius: 1px; background-color: rgba(127, 127, 127, 0.35); }
+.cg-bar-on { background-color: #34c759; }
+
+.cg-tips {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background-color: rgba(127, 127, 127, 0.12);
+  border-left-width: 3px;
+  border-color: #8e8e93;
+}
+.cg-tips-fair { border-color: #ff9f0a; background-color: rgba(255, 159, 10, 0.10); }
+.cg-tips-poor, .cg-tips-offline { border-color: #ff453a; background-color: rgba(255, 69, 58, 0.10); }
+.cg-tips-good { border-color: #34c759; }
+
+.cg-speed { spacing: 8px; }
+.cg-speed-text { font-size: 12px; font-feature-settings: "tnum"; padding-right: 8px; }
+.cg-button {
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: rgba(127, 127, 127, 0.18);
+}
+.cg-button:hover { background-color: rgba(127, 127, 127, 0.28); }
+.cg-button:active { background-color: rgba(127, 127, 127, 0.36); }
+.cg-progress-track { height: 4px; border-radius: 2px; background-color: rgba(127, 127, 127, 0.2); }
+.cg-progress-bar { height: 4px; border-radius: 2px; background-color: #0a84ff; }
+
+.cg-pills { spacing: 6px; }
+.cg-pill-row { spacing: 6px; }
+.cg-pill {
+  padding: 7px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: rgba(127, 127, 127, 0.14);
+  transition-duration: 150ms;
+}
+.cg-pill:hover { background-color: rgba(127, 127, 127, 0.24); }
+.cg-pill:checked {
+  color: #ffffff;
+  background-color: #3584e4;
+  background-color: -st-accent-color;
+}
+.cg-pill:checked:hover {
+  background-color: #4a90e8;
+  background-color: -st-accent-color;
+}
+.cg-pill:focus { box-shadow: inset 0 0 0 2px rgba(127, 127, 127, 0.5); }
+
+.cg-footer { font-size: 10.5px; color: rgba(127, 127, 127, 0.9); }
+
+/* -- desktop widget -------------------------------------------------------- */
+.cg-widget {
+  width: 296px;
+  padding: 14px 16px 12px 16px;
+  spacing: 6px;
+  border-radius: 22px;
+  color: #f5f5f7;
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(50, 50, 54, 0.94);
+  background-gradient-end: rgba(30, 30, 33, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40);
+}
+.cg-widget.cg-light {
+  color: #1d1d1f;
+  background-gradient-start: rgba(255, 255, 255, 0.96);
+  background-gradient-end: rgba(242, 242, 247, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+.cg-widget.cg-dragging { box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45); }
+
+.cg-w-top { spacing: 6px; }
+.cg-w-app { font-size: 10px; font-weight: 800; letter-spacing: 1.4px; color: rgba(142, 142, 147, 1); }
+.cg-w-dot { width: 9px; height: 9px; border-radius: 5px; background-color: #8e8e93; }
+.cg-w-dot.cg-good { background-color: #34c759; box-shadow: 0 0 6px rgba(52, 199, 89, 0.7); }
+.cg-w-dot.cg-fair { background-color: #ff9f0a; box-shadow: 0 0 6px rgba(255, 159, 10, 0.7); }
+.cg-w-dot.cg-poor,
+.cg-w-dot.cg-offline { background-color: #ff453a; box-shadow: 0 0 7px rgba(255, 69, 58, 0.8); }
+.cg-w-latency { font-size: 12px; font-weight: 700; font-feature-settings: "tnum"; }
+.cg-w-headline { font-size: 18px; font-weight: 800; padding-top: 2px; }
+.cg-w-detail { font-size: 11.5px; color: rgba(142, 142, 147, 1); font-feature-settings: "tnum"; }
+.cg-w-chain { height: 26px; margin-top: 4px; }
+.cg-w-graph { height: 44px; }
