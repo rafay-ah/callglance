@@ -152,7 +152,8 @@ def draw_chain(cr, w: float, h: float, snap: dict | None, fg, compact: bool = Fa
         nxt = nodes[i + 1]
         cr.set_line_width(3.5 if nxt["status"] == "origin" else 2.5)
         cr.set_dash([2, 4] if nxt["status"] == "unmeasured" else [])
-        rgba(cr, color_of(nxt), 0.35 if measuring else (0.45 if nxt["status"] == "affected" else 0.9))
+        alpha = 0.35 if measuring else (0.45 if nxt["status"] == "affected" else 0.9)
+        rgba(cr, color_of(nxt), alpha)
         cr.move_to(x0 + 8, y)
         cr.line_to(x1 - 8, y)
         cr.stroke()
@@ -204,7 +205,8 @@ def draw_graph(cr, w: float, h: float, points: list[dict], fg, compact: bool = F
     def x_of(ts: float) -> float:
         return left + (right - left) * (1 - (now - ts) / span)
 
-    lat = [p["net_ms"] + (p.get("net_jitter") or 0) / 2 for p in points if p.get("net_ms") is not None]
+    lat = [p["net_ms"] + (p.get("net_jitter") or 0) / 2
+           for p in points if p.get("net_ms") is not None]
     upper = _nice_max(max(20.0, _percentile(lat, 0.98) * 1.15))
 
     def y_of(v: float) -> float:
@@ -376,7 +378,8 @@ def draw_card(cr, snap: dict | None, history: list[dict], dark: bool) -> None:
     head_rgb = COLORS[level] if level in ("fair", "poor", "offline") else fg
     text(cr, snap.get("headline") or "Checking…", px, py + 18, 18, head_rgb,
          weight=Pango.Weight.HEAVY, max_width=inner_w)
-    parts = [f"{fmt_ms(metrics.get('jitter_ms'))} jitter", f"{fmt_pct(metrics.get('loss_pct'))} loss"]
+    parts = [f"{fmt_ms(metrics.get('jitter_ms'))} jitter",
+             f"{fmt_pct(metrics.get('loss_pct'))} loss"]
     wifi = snap.get("wifi") or {}
     if wifi.get("signal_dbm") is not None:
         parts.append(f"Wi-Fi {fmt_dbm(wifi['signal_dbm'])}")

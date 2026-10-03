@@ -243,7 +243,8 @@ def assess(inp: Inputs, th: Thresholds) -> Verdict:
         )
         if router_down:
             where = "Wi-Fi" if on_wifi else "home network"
-            headline = "Your Wi-Fi is the problem" if on_wifi else "Your home network is the problem"
+            headline = ("Your Wi-Fi is the problem" if on_wifi
+                        else "Your home network is the problem")
             return Verdict(OFFLINE, headline, f"Can't reach your router over your {where}.",
                            culprit=home_culprit, cause="outage", origin="router",
                            tips=_wifi_tips(inp.wifi) if on_wifi else

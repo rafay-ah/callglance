@@ -89,12 +89,12 @@ def summarize(samples: Iterable[Sample], train_length: int = 1) -> Summary:
             trains.setdefault(s.train, []).append(s)
         for burst in trains.values():
             burst.sort(key=lambda s: s.idx)
-            for a, b in zip(burst, burst[1:]):
+            for a, b in zip(burst, burst[1:], strict=False):
                 if b.idx == a.idx + 1:  # only truly consecutive packets
                     diffs.append(abs(b.rtt - a.rtt))
     if not diffs:
         ordered = sorted(measured, key=lambda s: (s.t, s.idx))
-        diffs = [abs(b.rtt - a.rtt) for a, b in zip(ordered, ordered[1:])]
+        diffs = [abs(b.rtt - a.rtt) for a, b in zip(ordered, ordered[1:], strict=False)]
     if diffs:
         out.jitter_ms = sum(diffs) / len(diffs)
     return out

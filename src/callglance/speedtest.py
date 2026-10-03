@@ -116,7 +116,8 @@ def _proxy_for_https() -> tuple[str, int, dict] | None:
     parsed = urllib.parse.urlsplit(url if "://" in url else f"http://{url}")
     headers = {}
     if parsed.username:
-        creds = f"{urllib.parse.unquote(parsed.username)}:{urllib.parse.unquote(parsed.password or '')}"
+        user = urllib.parse.unquote(parsed.username)
+        creds = f"{user}:{urllib.parse.unquote(parsed.password or '')}"
         headers["Proxy-Authorization"] = "Basic " + b64encode(creds.encode()).decode()
     return parsed.hostname or "", parsed.port or 8080, headers
 

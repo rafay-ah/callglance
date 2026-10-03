@@ -627,9 +627,8 @@ class Engine:
         if not alive:
             return  # a real outage: do not blame the probe method
         for mon in self.monitors.values():
-            if mon.silent_for_method(FALLBACK_AFTER):
-                if not mon.fall_back():
-                    mon.exhausted = True
+            if mon.silent_for_method(FALLBACK_AFTER) and not mon.fall_back():
+                mon.exhausted = True
 
     # -- results ----------------------------------------------------------------
     def _segment_summary(self, mon: TargetMonitor | None, window: float,

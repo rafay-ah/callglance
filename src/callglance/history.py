@@ -64,7 +64,7 @@ class History:
             f"SELECT {', '.join(FIELDS)} FROM points WHERE ts >= ? ORDER BY ts", (since,)
         ).fetchall()
         for row in rows:
-            self.memory.append(dict(zip(FIELDS, row)))
+            self.memory.append(dict(zip(FIELDS, row, strict=False)))
 
     def add(self, point: dict) -> None:
         clean = {name: point.get(name) for name in FIELDS}
@@ -89,7 +89,7 @@ class History:
             rows = self._db.execute(
                 f"SELECT {', '.join(FIELDS)} FROM points WHERE ts >= ? ORDER BY ts", (horizon,)
             ).fetchall()
-        return [dict(zip(FIELDS, row)) for row in rows]
+        return [dict(zip(FIELDS, row, strict=False)) for row in rows]
 
     def flush(self) -> None:
         with self._lock:

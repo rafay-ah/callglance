@@ -68,9 +68,9 @@ def _no_offload(ns: str, dev: str) -> None:
 
 
 def _spawn(ns: str, *args: str, name: str) -> None:
-    log = open(STATE / f"{name}.log", "w")
-    proc = subprocess.Popen(["ip", "netns", "exec", NS[ns], *args], stdout=log,
-                            stderr=subprocess.STDOUT, start_new_session=True)
+    with open(STATE / f"{name}.log", "w") as log:
+        proc = subprocess.Popen(["ip", "netns", "exec", NS[ns], *args], stdout=log,
+                                stderr=subprocess.STDOUT, start_new_session=True)
     (STATE / f"{name}.pid").write_text(str(proc.pid))
 
 

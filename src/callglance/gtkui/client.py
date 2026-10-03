@@ -124,7 +124,7 @@ class Client(GObject.Object):
             except ValueError:
                 return
             fields = data.get("fields") or []
-            rows = [dict(zip(fields, row)) for row in data.get("rows", [])]
+            rows = [dict(zip(fields, row, strict=False)) for row in data.get("rows", [])]
             known = {p["ts"] for p in self.history}
             merged = self.history + [p for p in rows if p["ts"] not in known]
             merged.sort(key=lambda p: p["ts"])

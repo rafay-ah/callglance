@@ -19,6 +19,11 @@ KNOWN_RESOLVERS = {
 }
 
 CGNAT = ipaddress.ip_network("100.64.0.0/10")
+# Addresses that live inside a home network. Deliberately not ipaddress.is_private,
+# which also covers documentation and benchmarking ranges an ISP may route.
+HOME_NETWORKS = [ipaddress.ip_network(n) for n in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8",
+    "fc00::/7", "fe80::/10", "::1/128")]
 
 
 @dataclass(frozen=True)
@@ -136,16 +141,15 @@ def _is_loopback(addr: str) -> bool:
 
 
 def is_private(addr: str | None) -> bool:
-    """RFC 1918 / link-local / loopback: addresses that live inside a home network."""
+    """RFC 1918 / link-local / loopback: addresses that live inside a home network.
+    Carrier-grade NAT space (100.64.0.0/10) belongs to the ISP, so it is not private."""
     if not addr:
         return False
     try:
         ip = ipaddress.ip_address(addr)
     except ValueError:
         return False
-    if ip in CGNAT:
-        return False  # carrier-grade NAT space belongs to the ISP
-    return ip.is_private or ip.is_link_local or ip.is_loopback
+    return any(ip.version == net.version and ip in net for net in HOME_NETWORKS)
 
 
 def is_cgnat(addr: str | None) -> bool:

@@ -5,7 +5,6 @@ import socket
 import struct
 import sys
 
-
 IDENTITY = None  # CHAOS id.server answer ("SIM" makes us look like Cloudflare)
 
 

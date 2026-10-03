@@ -262,7 +262,8 @@ class DetailsWindow(Gtk.Window):
             when = "just now" if ago < 2 else f"{ago} min ago"
             self.speed_text.set_text(
                 f"↓ {draw.fmt_mbps(st.get('download_mbps'))}  ↑ "
-                f"{draw.fmt_mbps(st.get('upload_mbps'))} Mb/s{grade}\n{st.get('summary', '')} · {when}")
+                f"{draw.fmt_mbps(st.get('upload_mbps'))} Mb/s{grade}\n"
+                f"{st.get('summary', '')} · {when}")
         elif status == "error":
             self.speed_text.set_text(st.get("error") or "Speed test failed.")
         elif status == "cancelled":

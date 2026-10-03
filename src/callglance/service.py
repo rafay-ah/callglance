@@ -30,8 +30,15 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
-from callglance import APP_ID, APP_NAME, DBUS_IFACE, DBUS_PATH, __version__  # noqa: E402
-from callglance import autostart, shellext  # noqa: E402
+from callglance import (  # noqa: E402
+    APP_ID,
+    APP_NAME,
+    DBUS_IFACE,
+    DBUS_PATH,
+    __version__,
+    autostart,
+    shellext,
+)
 from callglance.config import UI_WRITABLE, Config, state_dir  # noqa: E402
 from callglance.history import FIELDS, History  # noqa: E402
 from callglance.notifier import Notice, QualityNotifier  # noqa: E402

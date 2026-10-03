@@ -39,7 +39,8 @@ def _duration(seconds: float) -> str:
 
 
 class QualityNotifier:
-    def __init__(self, settings: Callable[[str], object], clock: Callable[[], float] = time.monotonic):
+    def __init__(self, settings: Callable[[str], object],
+                 clock: Callable[[], float] = time.monotonic) -> None:
         self.settings = settings
         self.clock = clock
         self.bad_since: float | None = None

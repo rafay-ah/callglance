@@ -111,7 +111,8 @@ class QueuedError:
     timestamp: float | None
 
 
-def parse_errqueue(data: bytes, ancdata: list[tuple[int, int, bytes]], dest: Any) -> QueuedError | None:
+def parse_errqueue(data: bytes, ancdata: list[tuple[int, int, bytes]],
+                   dest: Any) -> QueuedError | None:
     """Decode a ``struct sock_extended_err`` (+ offender address) from IP_RECVERR."""
     stamp = kernel_timestamp(ancdata)
     for level, ctype, cdata in ancdata:
