@@ -551,6 +551,7 @@ class Engine:
         if self.route is None or self.discovering:
             return
         self.discovering = True
+        route = self.route
         target = self.public_targets[0]
         found: dict[int, tuple[str | None, float]] = {}
         probes: list[Probe] = []
@@ -577,8 +578,8 @@ class Engine:
             for p in probes:
                 p.detach()
             self.discovering = False
-            if self.route is None:
-                return
+            if self.route is None or self.route != route:
+                return  # the network changed meanwhile; a new discovery is under way
             hops = []
             for ttl in range(1, MAX_TTL + 1):
                 addr, rtt = found.get(ttl, (None, None))

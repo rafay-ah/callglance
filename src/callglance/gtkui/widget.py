@@ -143,7 +143,8 @@ class WidgetWindow(Gtk.Window):
     def _save_position(self) -> bool:
         self._save_timer = 0
         x, y = self.get_position()
-        if Gdk.Display.get_default().__class__.__name__.startswith("X11") and (x or y):
+        # Native Wayland windows do not know where they are (always 0, 0).
+        if x or y:
             self.client.set_setting("widget", {"x": int(x) + draw.SHADOW,
                                                "y": int(y) + draw.SHADOW})
         return GLib.SOURCE_REMOVE

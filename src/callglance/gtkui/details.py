@@ -260,10 +260,12 @@ class DetailsWindow(Gtk.Window):
             grade = f" · Bufferbloat {st['grade']}" if st.get("grade") else ""
             ago = max(0, int((time.time() - (st.get("finished_at") or time.time())) / 60))
             when = "just now" if ago < 2 else f"{ago} min ago"
+            bloat = ("\nCalls lag when the line is busy: turn on SQM/QoS in your router."
+                     if st.get("grade") in ("C", "D", "F") else "")
             self.speed_text.set_text(
                 f"↓ {draw.fmt_mbps(st.get('download_mbps'))}  ↑ "
                 f"{draw.fmt_mbps(st.get('upload_mbps'))} Mb/s{grade}\n"
-                f"{st.get('summary', '')} · {when}")
+                f"{st.get('summary', '')} · {when}{bloat}")
         elif status == "error":
             self.speed_text.set_text(st.get("error") or "Speed test failed.")
         elif status == "cancelled":

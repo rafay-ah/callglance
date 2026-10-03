@@ -258,7 +258,12 @@ class Service(Gio.Application):
             self.history = History(state_dir() / "history.sqlite3",
                                    keep_hours=float(self.config["history_hours"]))
             self.engine = Engine(self.config, self.history)
-        self.speedtest = SpeedTest(self.engine.internet_latency, self._on_speedtest)
+        if self.demo:
+            from callglance.demo import DemoSpeedTest
+
+            self.speedtest = DemoSpeedTest(self.engine.internet_latency, self._on_speedtest)
+        else:
+            self.speedtest = SpeedTest(self.engine.internet_latency, self._on_speedtest)
         self.engine.add_listener(lambda snap: GLib.idle_add(self._publish, snap))
         self.engine.start()
 

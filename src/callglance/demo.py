@@ -18,6 +18,7 @@ from callglance.engine import Engine
 from callglance.history import History
 from callglance.monitor import Schedule
 from callglance.netinfo import Route
+from callglance.speedtest import SpeedTest
 from callglance.stats import Sample, SampleWindow, summarize
 from callglance.verdict import Thresholds, metric_level, worst
 
@@ -220,3 +221,36 @@ def prefill_history(history: History, minutes: int = 60, seed: int = 3) -> None:
             "dns_ms": round(rng.uniform(10, 18), 1), "wifi_dbm": -54 + rng.randint(-3, 3) - (
                 20 if wifi_bad else 0),
         })
+
+
+class DemoSpeedTest(SpeedTest):
+    """A simulated speed test: same states and timing, no network traffic."""
+
+    def _run(self) -> None:
+        st = self.state
+        try:
+            st.idle_latency_ms = 17.4
+            phases = (("download", 312.0, 0.04, 0.52), ("upload", 41.0, 0.52, 1.0))
+            for phase, mbps, p0, p1 in phases:
+                st.phase = phase
+                for step in range(20):
+                    if self._stop.wait(0.3):
+                        st.status, st.summary = "cancelled", "Speed test cancelled"
+                        return
+                    ramp = 0.6 + 0.4 * min(1.0, step / 6)
+                    st.live_mbps = mbps * ramp * random.uniform(0.95, 1.05)
+                    st.progress = p0 + (p1 - p0) * (step + 1) / 20
+                    self._emit()
+                if phase == "download":
+                    st.download_mbps, st.loaded_down_ms = mbps, 55.8
+                else:
+                    st.upload_mbps, st.loaded_up_ms = mbps, 61.2
+                st.data_used_mb += mbps * 6 / 8
+            self._finish()
+        finally:
+            st.phase = None
+            st.live_mbps = None
+            st.finished_at = time.time()
+            if st.status == "running":
+                st.status = "done"
+            self._emit()

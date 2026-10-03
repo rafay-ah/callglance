@@ -328,7 +328,10 @@ class CallGlanceIndicator extends PanelMenu.Button {
             this._speedText.text = `${SPEED_PHASES[st.phase] ?? 'Testing…'}${live}`;
         } else if (st?.status === 'done') {
             const grade = st.grade ? `  ·  Bufferbloat ${st.grade}` : '';
-            this._speedText.text = `↓ ${fmtMbps(st.download_mbps)}  ↑ ${fmtMbps(st.upload_mbps)} Mb/s${grade}\n${st.summary} · ${relativeTime(st.finished_at)}`;
+            // Bad bufferbloat is the usual cause of calls lagging when someone else is busy.
+            const bloat = ['C', 'D', 'F'].includes(st.grade)
+                ? `\nCalls lag when the line is busy: turn on SQM/QoS in your router.` : '';
+            this._speedText.text = `↓ ${fmtMbps(st.download_mbps)}  ↑ ${fmtMbps(st.upload_mbps)} Mb/s${grade}\n${st.summary} · ${relativeTime(st.finished_at)}${bloat}`;
         } else if (st?.status === 'error') {
             this._speedText.text = st.error ?? 'Speed test failed.';
         } else if (st?.status === 'cancelled') {

@@ -272,7 +272,7 @@ class SpeedTest:
                         conn.request("GET", f"/__down?bytes={size}")
                         resp = conn.getresponse()
                         if resp.status != 200:
-                            raise RuntimeError(f"HTTP {resp.status} from {HOST}")
+                            raise HttpError(resp.status)
                         while not stop.is_set():
                             chunk = resp.read(64 * 1024)
                             if not chunk:
@@ -292,7 +292,7 @@ class SpeedTest:
                         resp = conn.getresponse()
                         resp.read()
                         if resp.status != 200:
-                            raise RuntimeError(f"HTTP {resp.status} from {HOST}")
+                            raise HttpError(resp.status)
                     took = time.monotonic() - started
                     if took < 1.0:
                         size = min(size * 2, MAX_REQUEST_BYTES)
@@ -341,7 +341,18 @@ class SpeedTest:
         return mbps, counter.bytes
 
 
+class HttpError(RuntimeError):
+    def __init__(self, status: int) -> None:
+        super().__init__(f"HTTP {status} from {HOST}")
+        self.status = status
+
+
 def _friendly_error(exc: BaseException) -> str:
+    if isinstance(exc, HttpError) and exc.status in (403, 429):
+        return (f"The speed test server refused the test (HTTP {exc.status}). It may be "
+                "limiting how often tests run; try again in a few minutes.")
+    if isinstance(exc, HttpError):
+        return f"The speed test server answered with an error (HTTP {exc.status})."
     if isinstance(exc, (TimeoutError, OSError)) and "timed out" in str(exc):
         return "The speed test server did not answer in time."
     if isinstance(exc, ssl.SSLError):
