@@ -121,3 +121,36 @@ def test_wifi_loss_without_icmp(net):
     net.impair("wifi", loss=3)
     snap = run_engine(45, window=35)
     assert snap["culprit"] == "wifi"
+
+
+def test_icmp_blocked_beyond_the_router_is_not_mistaken_for_loss(net):
+    """Offices and clouds often drop ICMP to the internet. CallGlance must pick
+    another probe method without ever reporting the unanswered pings as loss."""
+    subprocess.run(["ip", "netns", "exec", topology.NS["router"], "iptables", "-A", "FORWARD",
+                    "-p", "icmp", "-j", "DROP"], check=True)
+    try:
+        lines = run_engine_timeline(14)
+    finally:
+        subprocess.run(["ip", "netns", "exec", topology.NS["router"], "iptables", "-F"],
+                       check=False)
+    levels = [line["level"] for line in lines]
+    assert set(levels) <= {"unknown", "good"}, levels
+    assert levels[-1] == "good"
+    final = lines[-1]
+    assert final["segments"]["router"]["method"] == "icmp"
+    assert final["segments"]["internet"]["loss_pct"] == 0.0
+
+
+def test_outage_at_startup_is_reported_quickly(net):
+    net.impair("upstream", loss=100)
+    lines = run_engine_timeline(8)
+    assert lines[-1]["level"] == "offline" and lines[-1]["culprit"] == "isp"
+
+
+def run_engine_timeline(seconds):
+    cmd = ["ip", "netns", "exec", topology.NS["client"], "setpriv", "--reuid=65534",
+           "--regid=65534", "--clear-groups", sys.executable,
+           str(HERE / "netsim" / "run_engine.py"), "--seconds", str(seconds)]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=seconds + 60)
+    return [json.loads(line) for line in out.stdout.splitlines()
+            if line.startswith("{") and not line.startswith('{"final"')]

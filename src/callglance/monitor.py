@@ -52,6 +52,7 @@ class TargetMonitor:
         self.method_name = ""
         self.schedule = methods[0][2] if methods else Schedule()
         self.exhausted = False  # every method tried, nothing ever answered
+        self.unreachable = False  # ...and nothing else on the path answered either
         self._probe: Probe | None = None
         self._timer: TimerHandle | None = None
         self._pending: dict[int, Sample] = {}
@@ -60,6 +61,7 @@ class TargetMonitor:
         self._started_at = 0.0
         self._replies_with_method = 0
         self._sent_with_method = 0
+        self._preconfirmed = False
         self.ever_replied = False
         self.reply_addr: str | None = None
         self.on_sample: Callable[[TargetMonitor, Sample], None] | None = None
@@ -93,6 +95,7 @@ class TargetMonitor:
             self._started_at = self.loop.time()
             self._replies_with_method = 0
             self._sent_with_method = 0
+            self._preconfirmed = False
             log.debug("%s (%s): probing with %s", self.key, self.address, name)
             return
         self._probe = None
@@ -118,6 +121,31 @@ class TargetMonitor:
             and self.loop.time() - self._started_at >= min_age
         )
 
+    @property
+    def confirmed(self) -> bool:
+        """The current method has had at least one answer, so silence means loss."""
+        return self._replies_with_method > 0 or self._preconfirmed
+
+    def use_method(self, index: int, confirmed: bool = False) -> None:
+        """Switch to a method known to work (found by the engine's preflight)."""
+        if index != self.method_index or self._probe is None:
+            self.method_index = index
+            self._open_method()
+            self.window.clear()
+        self.exhausted = False
+        self.unreachable = False
+        self._preconfirmed = confirmed
+
+    def mark_unreachable(self) -> None:
+        """Nothing answers this target, whatever the method: its silence is real loss."""
+        self.exhausted = True
+        self.unreachable = True
+
+    def silent_since(self, seconds: float, now: float | None = None) -> bool:
+        now = self.loop.time() if now is None else now
+        recent = self.window.since(now - seconds)
+        return bool(recent) and all(s.rtt is None for s in recent)
+
     def fall_back(self) -> bool:
         """Switch to the next probe method. Returns False when none is left."""
         if not self.can_fall_back():
@@ -126,6 +154,8 @@ class TargetMonitor:
         log.info("%s (%s): no answers to %s, trying %s", self.key, self.address,
                  self.method_name, self.methods[self.method_index][0])
         self._open_method()
+        # Unanswered probes of a method the target ignores are not packet loss.
+        self.window.clear()
         return self._probe is not None
 
     def restart_methods(self) -> None:
@@ -133,6 +163,7 @@ class TargetMonitor:
         self.method_index = 0
         self.exhausted = False
         self._open_method()
+        self.window.clear()
 
     # -- probing ------------------------------------------------------------
     def _send_train(self) -> None:

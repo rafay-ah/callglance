@@ -46,7 +46,7 @@ except (ImportError, ValueError):
         AppIndicator = None
 
 from callglance import APP_ID  # noqa: E402
-from callglance.gtkui import draw  # noqa: E402
+from callglance.gtkui import UI_EXIT_NO_TOOLKIT, draw  # noqa: E402
 from callglance.gtkui.client import Client  # noqa: E402
 from callglance.gtkui.details import DetailsWindow  # noqa: E402
 from callglance.gtkui.widget import WidgetWindow  # noqa: E402
@@ -249,6 +249,9 @@ class FallbackApp:
 
 
 def run(show: bool = False) -> int:
+    if Gdk.Screen.get_default() is None:
+        log.warning("no display to show a tray icon on")
+        return UI_EXIT_NO_TOOLKIT
     app = FallbackApp(show)
     GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: app.quit() or False)
     GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, lambda: app.quit() or False)

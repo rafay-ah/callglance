@@ -73,6 +73,10 @@ RECENT_WINDOW = 6.0  # seconds used to detect outages quickly
 DISCOVERY_EVERY = 300.0
 MAX_TTL = 8
 FALLBACK_AFTER = 8.0  # seconds without answers before trying another probe method
+PREFLIGHT_TIMEOUT = 2.0
+PREFLIGHT_RETRY = 10.0  # while the internet is unreachable
+RECHECK_SILENT = 30.0  # a target silent this long while others answer: re-pick its method
+STARTUP_GRACE = 20.0  # nothing answered at all for this long: treat it as an outage
 
 SEGMENT_LABELS = {"router": "Router", "isp": "ISP", "internet": "Internet"}
 
@@ -250,6 +254,9 @@ class Engine:
         self._discovery_timer = None
         self.dns_intercepted: bool | None = None
         self._icmp_checked = time.monotonic()
+        self._preflighting = False
+        self._preflight_timer = None
+        self._rechecked: dict[str, float] = {}
 
     # -- public API (any thread) ------------------------------------------------
     def add_listener(self, callback: Callable[[dict], None]) -> None:
@@ -353,6 +360,9 @@ class Engine:
         if self._discovery_timer is not None:
             self._discovery_timer.cancel()
             self._discovery_timer = None
+        if self._preflight_timer is not None:
+            self._preflight_timer.cancel()
+            self._preflight_timer = None
 
     def _apply_route(self, route: Route | None) -> None:
         self._stop_monitors()
@@ -360,6 +370,7 @@ class Engine:
         self.route = route
         self.hops, self.isp_hop, self.discovered_at = [], None, None
         self.network_since = time.monotonic()
+        self.dns_intercepted = None
         if route is None:
             self.link_kind = "other"
             self.wifi = None
@@ -384,14 +395,12 @@ class Engine:
             methods.append(("tcp:443", lambda a=addr: TcpConnect(a, 443), tcp_sched))
             self._add_monitor(f"net:{addr}", addr, methods, step * (i + 2))
 
-        if not self.icmp and "1.1.1.1" in self.public_targets:
-            self.loop.call_later(0.2, self._check_resolver_identity)
-
         servers = self.dns_reader()
         self.dns = DnsTimer(self.loop, servers[0] if servers else self.public_targets[0],
                             list(self.config["dns_names"]))
         self.dns.start()
         self.loop.call_later(1.0, self.dns.lookup)
+        self.loop.call_later(0.05, self._preflight)
         self.loop.call_later(0.5, self._discover)
         self._poll_wifi()
 
@@ -434,6 +443,71 @@ class Engine:
         mon = TargetMonitor(self.loop, key, addr, methods, offset=offset)
         self.monitors[key] = mon
         mon.start()
+
+    # -- preflight: pick probe methods that get answers -----------------------------
+    def _preflight(self, keys: list[str] | None = None) -> None:
+        """Try every probe method of every target at once and keep, for each target,
+        the preferred method that got an answer.
+
+        This takes ~2 s instead of falling back one method at a time, and tells a
+        network that ignores pings (common at work and in the cloud) apart from one
+        that is down: if nothing on the internet answers any kind of probe, that is an
+        outage, reported straight away and re-checked every few seconds.
+        """
+        if self.route is None or self._preflighting:
+            return
+        self._preflighting = True
+        route = self.route
+        candidates: list[tuple[TargetMonitor, int, Probe, list[bool]]] = []
+        for key, mon in self.monitors.items():
+            if key == "isp" or (keys is not None and key not in keys):
+                continue
+            for index, (name, factory, _sched) in enumerate(mon.methods):
+                if "ttl" in name:
+                    continue  # routers rate-limit these; the normal fallback reaches them
+                if name == "dns" and key.startswith("net:") and self.dns_intercepted:
+                    continue
+                try:
+                    probe = factory()
+                    answered = [False]
+                    probe.attach(self.loop, lambda _reply, a=answered: a.__setitem__(0, True))
+                except OSError:
+                    continue
+                candidates.append((mon, index, probe, answered))
+                for k in range(3):
+                    self.loop.call_later(0.15 * k, probe.send, 60000 + k)
+
+        def finish() -> None:
+            self._preflighting = False
+            for _mon, _index, probe, _answered in candidates:
+                probe.detach()
+            if self.route != route:
+                return
+            best: dict[str, tuple[TargetMonitor, int]] = {}
+            for mon, index, _probe, answered in candidates:
+                if answered[0] and (mon.key not in best or index < best[mon.key][1]):
+                    best[mon.key] = (mon, index)
+            for mon, index in best.values():
+                mon.use_method(index, confirmed=True)
+            public = [m for k, m in self.monitors.items() if k.startswith("net:")
+                      and (keys is None or k in keys)]
+            if (self.dns_intercepted is None and "1.1.1.1" in self.public_targets
+                    and any(m.method_name == "dns" for m in public)):
+                self._check_resolver_identity()
+            if public and not any(m.key in best for m in public):
+                log.info("nothing on the internet answers any kind of probe")
+                for mon in public:
+                    mon.mark_unreachable()
+                router = self.monitors.get("router")
+                if keys is None and router is not None and "router" not in best:
+                    # Not even the router answers anything: the link itself is down.
+                    router.mark_unreachable()
+                if self._preflight_timer is not None:
+                    self._preflight_timer.cancel()
+                self._preflight_timer = self.loop.call_later(PREFLIGHT_RETRY, self._preflight,
+                                                             keys)
+
+        self.loop.call_later(PREFLIGHT_TIMEOUT, finish)
 
     # -- DNS interception ---------------------------------------------------------
     def _check_resolver_identity(self) -> None:
@@ -626,21 +700,43 @@ class Engine:
         )
         if not alive:
             return  # a real outage: do not blame the probe method
-        for mon in self.monitors.values():
+        for key, mon in self.monitors.items():
+            if mon.unreachable:
+                continue  # the preflight retries take care of it
             if mon.silent_for_method(FALLBACK_AFTER) and not mon.fall_back():
                 mon.exhausted = True
+            elif (mon.confirmed and key != "isp" and mon.silent_since(RECHECK_SILENT, now)
+                  and now - self._rechecked.get(key, 0.0) > 60.0):
+                # Answered before, silent now while the rest of the path answers:
+                # maybe it stopped answering this kind of probe. Look again.
+                self._rechecked[key] = now
+                self._preflight([key])
 
     # -- results ----------------------------------------------------------------
+    def _usable(self, mon: TargetMonitor) -> bool:
+        """Can this monitor's silence be trusted as packet loss?
+
+        Only once its probe method has been answered at least once: until then the
+        target may simply ignore that kind of probe, and we are still trying others.
+        A target that ignored every method, or a network where nothing at all has
+        answered for a while, is genuinely unreachable.
+        """
+        if mon.confirmed or mon.exhausted:
+            return True
+        if any(m.confirmed for m in self.monitors.values()):
+            return False
+        return time.monotonic() - self.network_since > STARTUP_GRACE
+
     def _segment_summary(self, mon: TargetMonitor | None, window: float,
                          now: float) -> Summary | None:
-        if mon is None:
+        if mon is None or not self._usable(mon):
             return None
         main = mon.summary(window, now)
         loss = mon.summary(max(window, float(self.config.get("loss_window", 60))), now)
         return _merge_loss(main, loss)
 
     def _internet(self, window: float, loss_window: float, now: float) -> Summary | None:
-        mons = [m for k, m in self.monitors.items() if k.startswith("net:")]
+        mons = [m for k, m in self.monitors.items() if k.startswith("net:") and self._usable(m)]
         if not mons:
             return None
         return combine_internet([m.summary(window, now) for m in mons],
@@ -651,8 +747,8 @@ class Engine:
         net = self._internet(HISTORY_WINDOW, HISTORY_WINDOW, now)
         router = self.monitors.get("router")
         isp = self.monitors.get("isp")
-        r = router.summary(HISTORY_WINDOW, now) if router else None
-        i = isp.summary(HISTORY_WINDOW, now) if isp else None
+        r = router.summary(HISTORY_WINDOW, now) if router and self._usable(router) else None
+        i = isp.summary(HISTORY_WINDOW, now) if isp and self._usable(isp) else None
         dns = self.dns.state() if self.dns else {}
         verdict = self.tracker.current
         return {
@@ -714,11 +810,13 @@ class Engine:
         net = self._internet(window, loss_window, now)
         net_recent = self._internet(RECENT_WINDOW, RECENT_WINDOW, now)
         router = self._segment_summary(router_mon, window, now)
-        router_recent = router_mon.summary(RECENT_WINDOW, now) if router_mon else None
+        router_recent = (router_mon.summary(RECENT_WINDOW, now)
+                         if router_mon and self._usable(router_mon) else None)
         isp = self._segment_summary(isp_mon, window, now)
-        isp_recent = isp_mon.summary(RECENT_WINDOW, now) if isp_mon else None
-        router_measurable = bool(router_mon and (router_mon.ever_replied or
-                                                 not router_mon.exhausted))
+        isp_recent = (isp_mon.summary(RECENT_WINDOW, now)
+                      if isp_mon and self._usable(isp_mon) else None)
+        router_measurable = bool(router_mon and (router_mon.ever_replied or router_mon.unreachable
+                                                 or not router_mon.exhausted))
         inputs = Inputs(
             internet=net,
             internet_recent=net_recent,

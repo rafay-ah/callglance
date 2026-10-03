@@ -66,7 +66,9 @@ class FakeMonitor:
         self.window = SampleWindow(keep=300.0)
         self.schedule = Schedule()
         self.ever_replied = True
+        self.confirmed = True
         self.exhausted = False
+        self.unreachable = False
         self.train = 0
 
     def summary(self, seconds: float, now: float | None = None):
