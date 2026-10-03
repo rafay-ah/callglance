@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.AppImage
+*.deb
+/AppDir/
+/out/
+.coverage
+htmlcov/
+node_modules/
