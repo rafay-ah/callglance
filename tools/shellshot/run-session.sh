@@ -13,6 +13,9 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 gdbus call --session -d test.CallGlance.Shot -o /test/CallGlance/Shot -m test.CallGlance.Shot.Eval "cgMain.overview.hide()" >/dev/null
+# A real session starts the notification service at login; this one has to ask.
+gdbus call --session -d org.freedesktop.DBus -o /org/freedesktop/DBus \
+  -m org.freedesktop.DBus.StartServiceByName org.gnome.Shell.Notifications 0 >/dev/null || true
 if [ -z "$CG_NO_APP" ]; then
   CALLGLANCE_DEMO_OFFSET="${CG_DEMO_OFFSET:-0}" PYTHONPATH="$REPO/src" \
     python3.12 -m callglance --demo -v > "$STATE/app.log" 2>&1 &

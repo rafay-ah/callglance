@@ -197,6 +197,9 @@ class Service(Gio.Application):
         if self.demo:
             demo_dir = Path(tempfile.mkdtemp(prefix="callglance-demo-"))
             self.config = Config(demo_dir / "config.json")
+            # Shorter windows so the story's twists show up within seconds.
+            for key, value in (("window", 12), ("loss_window", 20), ("notify_after", 8)):
+                self.config.set(key, value, save=False)
         else:
             self.config = Config()
         self._start_engine()
