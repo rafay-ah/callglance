@@ -38,7 +38,7 @@ class Phase:
 
 STORY = [
     Phase("good", 40),
-    Phase("wifi", 32, wifi_jitter=95.0, wifi_loss=1.0, signal=-76),
+    Phase("wifi", 32, wifi_jitter=150.0, wifi_loss=2.0, signal=-76),
     Phase("good", 24),
     Phase("isp", 30, isp_loss=9.0, isp_jitter=12.0),
     Phase("good", 24),

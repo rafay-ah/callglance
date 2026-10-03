@@ -1,0 +1,7 @@
+{
+  "uuid": "cgshot@callglance.test",
+  "name": "CallGlance screenshot harness (testing only)",
+  "description": "Exposes Eval and Screenshot over D-Bus inside a throwaway headless GNOME Shell. Never install this in a real session.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}

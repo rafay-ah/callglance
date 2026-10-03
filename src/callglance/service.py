@@ -232,7 +232,9 @@ class Service(Gio.Application):
 
             self.history = History(None)
             prefill_history(self.history)
-            self.engine = DemoEngine(self.config, self.history)
+            # Seconds into the demo story to start at (handy for screenshots).
+            offset = float(os.environ.get("CALLGLANCE_DEMO_OFFSET", "0") or 0)
+            self.engine = DemoEngine(self.config, self.history, offset=offset)
         else:
             from callglance.engine import Engine
 
