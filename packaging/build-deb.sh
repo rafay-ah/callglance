@@ -26,7 +26,19 @@ sys.exit(main())
 PY
 chmod 755 "$ROOT/usr/bin/callglance"
 
+install -Dm644 "$REPO/packaging/callglance.1" "$ROOT/usr/share/man/man1/callglance.1"
+gzip -9n "$ROOT/usr/share/man/man1/callglance.1"
+
 install -d "$ROOT/usr/share/doc/callglance"
+# lintian wants a changelog in a native package: a stub that points at the release notes.
+{
+  echo "callglance ($VERSION) unstable; urgency=medium"
+  echo
+  echo "  * Release $VERSION. Changes: https://github.com/rafay-ah/callglance/releases"
+  echo
+  echo " -- rafay-ah <54492363+rafay-ah@users.noreply.github.com>  $(date -R -u -d "@${SOURCE_DATE_EPOCH:-$(git -C "$REPO" log -1 --format=%ct 2>/dev/null || date +%s)}")"
+} > "$ROOT/usr/share/doc/callglance/changelog"
+gzip -9n "$ROOT/usr/share/doc/callglance/changelog"
 {
   echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
   echo "Upstream-Name: callglance"

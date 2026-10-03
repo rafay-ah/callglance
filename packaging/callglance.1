@@ -1,0 +1,59 @@
+.TH CALLGLANCE 1 "October 2026" "CallGlance" "User Commands"
+.SH NAME
+callglance \- see at a glance whether your connection is good enough for calls
+.SH SYNOPSIS
+.B callglance
+[\fB\-\-background\fR] [\fB\-\-demo\fR] [\fB\-v\fR]
+.br
+.B callglance
+.I command
+[\fIoptions\fR]
+.SH DESCRIPTION
+CallGlance measures latency, jitter and packet loss to your router, your ISP's first router
+and public internet targets, and says in plain words whether your connection is good for
+calls, and whether your Wi\-Fi or your ISP is to blame.
+.PP
+Without a command, it starts the background service (or, if it is already running, shows its
+details). On GNOME it shows a coloured dot in the top bar; on other desktops, a tray icon.
+.SH OPTIONS
+.TP
+.B \-\-background
+Start without showing anything (used at login).
+.TP
+.B \-\-demo
+Simulate a connection, to try the interface.
+.TP
+.B \-v
+More log output; repeat for even more.
+.SH COMMANDS
+.TP
+\fBstatus\fR [\fB\-\-json\fR] [\fB\-\-watch\fR] [\fB\-\-seconds\fR \fIN\fR]
+Print the verdict and the numbers per segment. Exits with 0 when the connection is good
+for calls, 2 otherwise.
+.TP
+.B speedtest
+Download and upload speed, with latency under load and a bufferbloat grade.
+.TP
+.B doctor
+Check what CallGlance can use on this system.
+.TP
+\fBautostart\fR [\fBon\fR|\fBoff\fR|\fBstatus\fR]
+Start at login, or not.
+.TP
+\fBextension\fR [\fBinstall\fR|\fBenable\fR|\fBstatus\fR]
+Install or enable the GNOME Shell extension.
+.TP
+.B enable\-icmp
+Allow unprivileged ping for the most precise measurements (asks for your password).
+.TP
+.B quit
+Stop the running CallGlance.
+.SH FILES
+.TP
+.I ~/.config/callglance/config.json
+Settings.
+.TP
+.I ~/.local/state/callglance/history.sqlite3
+The last 24 hours of measurements.
+.SH SEE ALSO
+https://github.com/rafay-ah/callglance
