@@ -38,6 +38,10 @@ def _pct(value) -> str:
     return "0%" if value == 0 else f"{value:.1f}%"
 
 
+def _dbm(value) -> str:
+    return f"{'−' if value < 0 else ''}{abs(value)} dBm"
+
+
 # -- talking to the running service ------------------------------------------------------
 
 def _call_service(method: str, *args, timeout_ms: int = 2000):
@@ -113,7 +117,7 @@ def render(snap: dict) -> str:
     if wifi:
         parts = [wifi.get("ssid") or "Wi-Fi"]
         if wifi.get("signal_dbm") is not None:
-            parts.append(f"{wifi['signal_dbm']} dBm ({wifi.get('quality')})")
+            parts.append(f"{_dbm(wifi['signal_dbm'])} ({wifi.get('quality')})")
         elif wifi.get("signal_pct") is not None:
             parts.append(f"{wifi['signal_pct']}% signal")
         if wifi.get("band"):
@@ -128,7 +132,7 @@ def render(snap: dict) -> str:
         lines.append("")
         lines.extend(f"  → {tip}" for tip in tips)
     probe = snap.get("probe") or {}
-    if probe and not probe.get("icmp"):
+    if probe and not probe.get("icmp") and not snap.get("demo"):
         lines.append("")
         lines.append(_c("  Measuring without ICMP (not permitted on this system). "
                         "Run `callglance enable-icmp` for ping-based measurements.", "90"))
@@ -330,6 +334,17 @@ def cmd_enable_icmp(args) -> int:
     return 1
 
 
+def cmd_quit(args) -> int:
+    if _call_service("Quit") is None:
+        print("CallGlance is not running.")
+        return 1
+    for _ in range(50):  # wait until it is gone, so `callglance quit && callglance` works
+        if _call_service("GetSettings", timeout_ms=200) is None:
+            return 0
+        time.sleep(0.1)
+    return 0
+
+
 def cmd_ui(args) -> int:
     from callglance.gtkui import main as ui_main
 
@@ -361,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", nargs="?", choices=["install", "enable", "status"],
                    default="status")
     sub.add_parser("enable-icmp", help="allow unprivileged ping (asks for your password)")
+    sub.add_parser("quit", help="stop the running CallGlance")
     p = sub.add_parser("ui", help=argparse.SUPPRESS)
     p.add_argument("--show", action="store_true")
     return parser
@@ -373,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     commands = {
         "status": cmd_status, "speedtest": cmd_speedtest, "doctor": cmd_doctor,
         "autostart": cmd_autostart, "extension": cmd_extension,
-        "enable-icmp": cmd_enable_icmp, "ui": cmd_ui,
+        "enable-icmp": cmd_enable_icmp, "quit": cmd_quit, "ui": cmd_ui,
     }
     if args.command:
         return commands[args.command](args)

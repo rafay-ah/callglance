@@ -31,3 +31,45 @@ Rules:
   `git rebase -r <base> --exec 'git commit --amend --reset-author --no-edit'` for a range.
 - Work happens directly on `main` unless told otherwise. Commit often, with clear,
   imperative commit messages.
+
+## Project map
+
+CallGlance tells you whether your connection is good enough for calls, and whether the Wi-Fi or
+the ISP is to blame. See README.md for the user-facing story.
+
+- `src/callglance/`: the Python service.
+  - Engine: `engine.py`, `monitor.py`, `probes.py`, `loop.py`, `stats.py`, `verdict.py`. It runs in
+    its own thread on a `selectors` loop and is stdlib-only, with no `gi` imports, so it stays
+    testable without PyGObject.
+  - `service.py`: the D-Bus API `io.github.rafay_ah.CallGlance1`, which passes JSON strings.
+    Notifications, autostart and first-run integration live here too.
+  - `gtkui/`: the GTK 3 tray fallback, started by the service when no shell extension registers.
+- `gnome-shell/callglance@rafay-ah.github.io/`: the GJS extension (GNOME 45–51), a thin view over
+  the D-Bus API.
+- `tests/`: pytest.
+  - `tests/netsim/` builds a simulated home network from namespaces plus a userspace link emulator.
+    Run it with `sudo python3 -m pytest -m netsim`.
+- `tools/shellshot/`: a headless GNOME Shell for screenshots and the README GIF (`record-demo.sh`).
+- `packaging/`: the .deb, AppImage and extension zip.
+- `.github/workflows/`: CI, and a release build that runs on a published release.
+
+## Commands
+
+```sh
+python3 -m pytest                      # unit, loopback and D-Bus tests
+sudo python3 -m pytest -m netsim       # end-to-end scenarios (root for namespaces)
+ruff check src tests tools && shellcheck -x packaging/*.sh tools/shellshot/*.sh
+PYTHONPATH=src python3 -m callglance --demo -v   # the app on a simulated connection
+packaging/build-deb.sh && packaging/build-appimage.sh
+```
+
+## Rules learned the hard way
+
+- No root, ever: unprivileged probes only. Ubuntu does not allow ICMP ping sockets by default, so
+  the TCP/UDP/DNS fallbacks are the main path there.
+- Probes of a method a target ignores must never count as loss. The preflight picks the methods.
+- The extension must never block the compositor, so use only async D-Bus calls. Compatibility:
+  - Don't pass `affectsInputRegion` to `addChrome`; GNOME 50 throws.
+  - Feature-detect `St.BoxLayout` `orientation`; `vertical` is gone in 51.
+  - Read `PopupSwitchMenuItem.state` instead of the signal argument.
+- St CSS: no negative lengths. They overflow St's size maths and break the popover layout.
