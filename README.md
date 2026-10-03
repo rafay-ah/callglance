@@ -74,8 +74,8 @@ chmod +x CallGlance-0.1.0-x86_64.AppImage
 ```
 
 The AppImage runs on your system's Python with PyGObject, which every GNOME desktop already has.
-If not: `sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1` (or your
-distribution's equivalent). On its first start it adds itself to the app grid, installs the top-bar
+If not: `sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`
+(or your distribution's equivalent). On its first start it adds itself to the app grid, installs the top-bar
 extension for your user and turns on start at login. An `aarch64` build is attached too.
 
 ### From source

@@ -238,9 +238,11 @@ def cmd_doctor(args) -> int:
 
         gi.require_version("Gtk", "3.0")
         gi.require_version("AyatanaAppIndicator3", "0.1")
+        import cairo  # noqa: F401  (pycairo draws the tray fallback's graphs)
+
         print(f"{ok} GTK 3 + AyatanaAppIndicator (tray fallback)")
     except (ImportError, ValueError):
-        print(f"{warn} Tray fallback unavailable: install gir1.2-gtk-3.0 and "
+        print(f"{warn} Tray fallback unavailable: install gir1.2-gtk-3.0, python3-gi-cairo and "
               "gir1.2-ayatanaappindicator3-0.1")
     rng = ping_group_range()
     if ping_sockets_allowed():

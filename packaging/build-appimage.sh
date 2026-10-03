@@ -28,7 +28,7 @@ export PYTHONPATH="$HERE/usr/share/callglance${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONDONTWRITEBYTECODE=1
 PYTHON=$(command -v python3 || true)
 if [ -z "$PYTHON" ] || ! "$PYTHON" -c 'import gi' 2>/dev/null; then
-  MSG="CallGlance needs Python 3 with PyGObject. On Ubuntu or Debian: sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1"
+  MSG="CallGlance needs Python 3 with PyGObject. On Ubuntu or Debian: sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1"
   command -v notify-send >/dev/null 2>&1 && notify-send -i dialog-warning CallGlance "$MSG"
   echo "$MSG" >&2
   exit 1
