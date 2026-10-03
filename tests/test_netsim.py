@@ -7,17 +7,35 @@ the verdict. Needs root (namespaces). Run with: sudo pytest -m netsim
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 from netsim import topology  # noqa: E402
 
 pytestmark = pytest.mark.netsim
+
+# The engine runs as `nobody`, which may not be allowed into the checkout (CI keeps
+# it in a private home directory), so it runs from a world-readable copy.
+STAGE = Path(tempfile.gettempdir()) / "callglance-netsim-code"
+RUN_ENGINE = STAGE / "tests" / "netsim" / "run_engine.py"
+
+
+def stage_code() -> None:
+    shutil.rmtree(STAGE, ignore_errors=True)
+    skip = shutil.ignore_patterns("__pycache__", "*.pyc")
+    shutil.copytree(ROOT / "src", STAGE / "src", ignore=skip)
+    shutil.copytree(HERE / "netsim", STAGE / "tests" / "netsim", ignore=skip)
+    for path in [STAGE, *STAGE.rglob("*")]:
+        path.chmod(0o755 if path.is_dir() else 0o644)
+    STAGE.parent.chmod(STAGE.parent.stat().st_mode | 0o011)
 
 
 @pytest.fixture(scope="module")
@@ -25,6 +43,7 @@ def net():
     reason = topology.available()
     if reason:
         pytest.skip(reason)
+    stage_code()
     topology.up()
     yield topology
     topology.down()
@@ -40,7 +59,7 @@ def clean(net):
 def run_engine(seconds, kind="wifi", window=None):
     cmd = ["ip", "netns", "exec", topology.NS["client"], "setpriv", "--reuid=65534",
            "--regid=65534", "--clear-groups", sys.executable,
-           str(HERE / "netsim" / "run_engine.py"), "--seconds", str(seconds), "--kind", kind]
+           str(RUN_ENGINE), "--seconds", str(seconds), "--kind", kind]
     if window:
         cmd += ["--window", str(window)]
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=seconds + 60,
@@ -150,7 +169,7 @@ def test_outage_at_startup_is_reported_quickly(net):
 def run_engine_timeline(seconds):
     cmd = ["ip", "netns", "exec", topology.NS["client"], "setpriv", "--reuid=65534",
            "--regid=65534", "--clear-groups", sys.executable,
-           str(HERE / "netsim" / "run_engine.py"), "--seconds", str(seconds)]
+           str(RUN_ENGINE), "--seconds", str(seconds)]
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=seconds + 60)
     return [json.loads(line) for line in out.stdout.splitlines()
             if line.startswith("{") and not line.startswith('{"final"')]
