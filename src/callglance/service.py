@@ -196,6 +196,12 @@ class Service(Gio.Application):
         conn = self.get_dbus_connection()
         if conn is not None:
             self.notifications = Notifications(conn, self.show)
+            # GNOME disables extensions while the screen is locked: the panel goes
+            # away and comes back on unlock. Do not put up a tray icon meanwhile.
+            conn.signal_subscribe(
+                "org.gnome.ScreenSaver", "org.gnome.ScreenSaver", "ActiveChanged",
+                "/org/gnome/ScreenSaver", None, Gio.DBusSignalFlags.NONE,
+                self._on_screensaver)
         if not self.demo:
             self._first_run_integration()
         for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
@@ -433,12 +439,31 @@ class Service(Gio.Application):
 
         self._ui_timer = GLib.timeout_add(int(delay * 1000), check)
 
+    def _on_screensaver(self, _conn, _sender, _path, _iface, _signal, params) -> None:
+        (active,) = params.unpack()
+        if not active:
+            self._schedule_ui_check(6.0)  # give the extension time to come back
+
+    def _screen_locked(self) -> bool:
+        if self._conn is None or not shellext.is_gnome_session():
+            return False
+        try:
+            reply = self._conn.call_sync(
+                "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver",
+                "GetActive", None, GLib.VariantType("(b)"), Gio.DBusCallFlags.NO_AUTO_START,
+                500, None)
+            return bool(reply.unpack()[0])
+        except GLib.Error:
+            return False
+
     def _ui_running(self) -> bool:
         return self._ui_proc is not None and self._ui_proc.poll() is None
 
     def _ensure_ui(self) -> None:
         if self._panel_owner is not None or self._ui_running() or self._ui_unavailable:
             return
+        if self._screen_locked():
+            return  # re-checked when the screen unlocks
         args = [sys.executable, "-m", "callglance", "ui"]
         if self._show_pending:
             args.append("--show")

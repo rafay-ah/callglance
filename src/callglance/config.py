@@ -32,7 +32,7 @@ DEFAULTS: dict[str, Any] = {
     "notify_after": 20,  # seconds a problem must last before we tell you
     "notify_cooldown": 600,  # seconds between two "quality dropped" notifications
     # Desktop widget (shared by the GNOME Shell extension and the GTK fallback)
-    "widget": {"enabled": False, "on_top": False, "x": -1, "y": -1, "monitor": 0},
+    "widget": {"enabled": False, "on_top": True, "x": -1, "y": -1, "monitor": 0},
     # Panel
     "panel_show_latency": False,
     # Housekeeping
